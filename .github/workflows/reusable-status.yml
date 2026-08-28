@@ -1,0 +1,34 @@
+name: Reusable Resonance Summary
+
+on:
+  workflow_call:
+    inputs:
+      python-result:
+        type: string
+        required: true
+      extra-result:
+        type: string
+        required: false
+        default: "success"
+      extra-label:
+        type: string
+        required: false
+        default: "Extra"
+
+jobs:
+  summary:
+    name: Nexus Resonance Summary
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Report status
+        run: |
+          echo "Nexus CI/CD completed."
+          echo "Python layer: ${{ inputs.python-result }}"
+          echo "${{ inputs.extra-label }}: ${{ inputs.extra-result }}"
+          if [ "${{ inputs.python-result }}" = "success" ] && [ "${{ inputs.extra-result }}" = "success" ]; then
+            echo "✓ The lattice holds. Resonance confirmed."
+          else
+            echo "⚠ One or more layers need attention."
+            exit 1
+          fi

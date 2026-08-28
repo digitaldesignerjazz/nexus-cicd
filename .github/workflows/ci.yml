@@ -1,0 +1,39 @@
+name: Nexus CI/CD
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: nexus-cicd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python Reference Layer
+    uses: ./.github/workflows/reusable-python.yml
+    with:
+      python-version: "3.12"
+      source-path: "src"
+
+  smoke:
+    name: Smoke Script
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run smoke
+        run: bash scripts/ci-smoke.sh
+
+  summary:
+    name: Nexus Resonance Summary
+    needs: [python, smoke]
+    uses: ./.github/workflows/reusable-status.yml
+    with:
+      python-result: ${{ needs.python.result }}
+      extra-result: ${{ needs.smoke.result }}
+      extra-label: "Smoke"

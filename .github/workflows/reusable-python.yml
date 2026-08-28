@@ -1,0 +1,49 @@
+name: Reusable Python CI
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version
+        type: string
+        required: false
+        default: "3.12"
+      source-path:
+        description: Directory or file to compile
+        type: string
+        required: false
+        default: "src"
+      runner:
+        description: GitHub-hosted or self-hosted runner label
+        type: string
+        required: false
+        default: "ubuntu-latest"
+
+jobs:
+  python:
+    name: Python ${{ inputs.python-version }}
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Compile & run reference layer
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          if [ -d "${{ inputs.source-path }}" ]; then
+            find "${{ inputs.source-path }}" -name '*.py' -print0 | xargs -0 python -m py_compile
+          elif [ -f "${{ inputs.source-path }}" ]; then
+            python -m py_compile "${{ inputs.source-path }}"
+          else
+            echo "No Python sources at ${{ inputs.source-path }} — skip compile."
+          fi
+          if [ -f src/nexus_cicd.py ]; then
+            python src/nexus_cicd.py
+          fi
+          echo "✓ Python layer integrity confirmed"

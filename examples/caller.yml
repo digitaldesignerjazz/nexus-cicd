@@ -1,0 +1,18 @@
+# Vorlage: in ein anderes Repo kopieren als .github/workflows/ci.yml
+name: Nexus CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  python:
+    uses: digitaldesignerjazz/nexus-cicd/.github/workflows/reusable-python.yml@main
+    with:
+      python-version: "3.12"
+      source-path: "."
+      # runner: "ubuntu-latest"
+      # runner: "self-hosted"   # nur wenn Hannover/Cyberspace online

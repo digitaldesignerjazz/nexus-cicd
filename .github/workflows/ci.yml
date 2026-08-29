@@ -3,13 +3,24 @@ name: Nexus CI/CD
 on:
   push:
     branches: ["main"]
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - ".github/workflows/**"
   pull_request:
     branches: ["main"]
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 concurrency:
-  group: nexus-cicd-${{ github.ref }}
+  group: nexus-cicd-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   python:
@@ -22,9 +33,12 @@ jobs:
   smoke:
     name: Smoke Script
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Run smoke
         run: bash scripts/ci-smoke.sh

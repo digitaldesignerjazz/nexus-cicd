@@ -37,16 +37,26 @@ jobs:
         id: deps
         run: |
           if [ -f requirements.txt ] || [ -f pyproject.toml ]; then
-            echo "cache=pip" >> "$GITHUB_OUTPUT"
+            echo "has_lock=true" >> "$GITHUB_OUTPUT"
           else
-            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "has_lock=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set up Python
+      - name: Set up Python with pip cache
+        if: steps.deps.outputs.has_lock == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: ${{ inputs.python-version }}
-          cache: ${{ steps.deps.outputs.cache }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Set up Python without cache
+        if: steps.deps.outputs.has_lock != 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ inputs.python-version }}
 
       - name: Compile and run reference layer
         run: |

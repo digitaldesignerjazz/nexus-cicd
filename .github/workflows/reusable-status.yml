@@ -19,6 +19,7 @@ jobs:
   summary:
     name: Nexus Resonance Summary
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: always()
     steps:
       - name: Report status
@@ -27,8 +28,8 @@ jobs:
           echo "Python layer: ${{ inputs.python-result }}"
           echo "${{ inputs.extra-label }}: ${{ inputs.extra-result }}"
           if [ "${{ inputs.python-result }}" = "success" ] && [ "${{ inputs.extra-result }}" = "success" ]; then
-            echo "✓ The lattice holds. Resonance confirmed."
+            echo "The lattice holds. Resonance confirmed."
           else
-            echo "⚠ One or more layers need attention."
+            echo "One or more layers need attention."
             exit 1
           fi

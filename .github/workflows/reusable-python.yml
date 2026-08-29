@@ -19,31 +19,62 @@ on:
         required: false
         default: "ubuntu-latest"
 
+permissions:
+  contents: read
+
 jobs:
   python:
     name: Python ${{ inputs.python-version }}
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Detect dependency file
+        id: deps
+        run: |
+          if [ -f requirements.txt ] || [ -f pyproject.toml ]; then
+            echo "has_lock=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_lock=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python with pip cache
+        if: steps.deps.outputs.has_lock == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Set up Python without cache
+        if: steps.deps.outputs.has_lock != 'true'
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ inputs.python-version }}
 
-      - name: Compile & run reference layer
+      - name: Compile and run reference layer
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip
-          if [ -d "${{ inputs.source-path }}" ]; then
-            find "${{ inputs.source-path }}" -name '*.py' -print0 | xargs -0 python -m py_compile
-          elif [ -f "${{ inputs.source-path }}" ]; then
-            python -m py_compile "${{ inputs.source-path }}"
+          src="${{ inputs.source-path }}"
+          if [ -d "$src" ]; then
+            mapfile -t files < <(find "$src" -name '*.py' -type f)
+            if [ ${#files[@]} -gt 0 ]; then
+              python -m py_compile "${files[@]}"
+            else
+              echo "No Python sources in $src — skip compile."
+            fi
+          elif [ -f "$src" ]; then
+            python -m py_compile "$src"
           else
-            echo "No Python sources at ${{ inputs.source-path }} — skip compile."
+            echo "No Python sources at $src — skip compile."
           fi
           if [ -f src/nexus_cicd.py ]; then
             python src/nexus_cicd.py
           fi
-          echo "✓ Python layer integrity confirmed"
+          echo "Python layer integrity confirmed"

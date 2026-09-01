@@ -33,6 +33,11 @@ jobs:
   python:
     name: Python ${{ inputs.python-version }}
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 15
+    env:
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_NO_PYTHON_VERSION_WARNING: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - name: Validate python-version
         env:
@@ -70,19 +75,46 @@ jobs:
             echo "source-path missing (${SOURCE_PATH}) — compile will skip"
           fi
 
+      - name: Cache identity
+        if: ${{ inputs.enable-pip-cache }}
+        env:
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "${PYTHON_VERSION}" > .python-version
+          echo "cache identity: ${PYTHON_VERSION}"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ inputs.python-version }}
           cache: ${{ inputs.enable-pip-cache && 'pip' || '' }}
-          cache-dependency-path: ${{ inputs.cache-dependency-path }}
+          cache-dependency-path: |
+            ${{ inputs.cache-dependency-path }}
+            .python-version
+
+      - name: Install from lockfile
+        if: ${{ inputs.enable-pip-cache }}
+        env:
+          LOCKFILE: ${{ inputs.cache-dependency-path }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "${LOCKFILE}" ]; then
+            echo "no lockfile at ${LOCKFILE} — skip install"
+            exit 0
+          fi
+          if grep -Eqv '^[[:space:]]*(#|$)' "${LOCKFILE}"; then
+            python -m pip install --upgrade pip
+            python -m pip install -r "${LOCKFILE}"
+          else
+            echo "lockfile has no pins — skip pip install"
+          fi
 
       - name: Compile & run reference layer
         env:
           SOURCE_PATH: ${{ inputs.source-path }}
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip
           if [ -d "${SOURCE_PATH}" ]; then
             find "${SOURCE_PATH}" -name '*.py' -print0 | xargs -0 python -m py_compile
           elif [ -f "${SOURCE_PATH}" ]; then

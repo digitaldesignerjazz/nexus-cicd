@@ -79,10 +79,19 @@ jobs:
         if: ${{ inputs.enable-pip-cache }}
         env:
           PYTHON_VERSION: ${{ inputs.python-version }}
+          RUNNER_LABEL: ${{ inputs.runner }}
+          RUNNER_OS_NAME: ${{ runner.os }}
+          RUNNER_ARCH_NAME: ${{ runner.arch }}
         run: |
           set -euo pipefail
-          printf '%s\n' "${PYTHON_VERSION}" > .python-version
-          echo "cache identity: ${PYTHON_VERSION}"
+          {
+            echo "python=${PYTHON_VERSION}"
+            echo "runner=${RUNNER_LABEL}"
+            echo "os=${RUNNER_OS_NAME}"
+            echo "arch=${RUNNER_ARCH_NAME}"
+          } > .ci-cache-identity
+          echo "cache identity:"
+          cat .ci-cache-identity
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -91,7 +100,7 @@ jobs:
           cache: ${{ inputs.enable-pip-cache && 'pip' || '' }}
           cache-dependency-path: |
             ${{ inputs.cache-dependency-path }}
-            .python-version
+            .ci-cache-identity
 
       - name: Install from lockfile
         if: ${{ inputs.enable-pip-cache }}

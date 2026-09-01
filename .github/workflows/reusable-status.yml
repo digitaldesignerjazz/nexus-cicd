@@ -22,11 +22,28 @@ jobs:
     if: always()
     steps:
       - name: Report status
+        env:
+          PYTHON_RESULT: ${{ inputs.python-result }}
+          EXTRA_RESULT: ${{ inputs.extra-result }}
+          EXTRA_LABEL: ${{ inputs.extra-label }}
         run: |
+          set -euo pipefail
           echo "Nexus CI/CD completed."
-          echo "Python layer: ${{ inputs.python-result }}"
-          echo "${{ inputs.extra-label }}: ${{ inputs.extra-result }}"
-          if [ "${{ inputs.python-result }}" = "success" ] && [ "${{ inputs.extra-result }}" = "success" ]; then
+          echo "Python layer: ${PYTHON_RESULT}"
+          echo "${EXTRA_LABEL}: ${EXTRA_RESULT}"
+
+          allowed='success|failure|cancelled|skipped'
+          case "${PYTHON_RESULT}" in
+            success|failure|cancelled|skipped) ;;
+            *) echo "invalid python-result: ${PYTHON_RESULT} (allowed: ${allowed})"; exit 1 ;;
+          esac
+          case "${EXTRA_RESULT}" in
+            success|failure|cancelled|skipped) ;;
+            *) echo "invalid extra-result: ${EXTRA_RESULT} (allowed: ${allowed})"; exit 1 ;;
+          esac
+
+          ok() { [ "$1" = success ]; }
+          if ok "${PYTHON_RESULT}" && ok "${EXTRA_RESULT}"; then
             echo "✓ The lattice holds. Resonance confirmed."
           else
             echo "⚠ One or more layers need attention."

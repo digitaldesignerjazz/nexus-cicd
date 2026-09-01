@@ -42,6 +42,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate source-path
+        env:
+          SOURCE_PATH: ${{ inputs.source-path }}
+        run: |
+          set -euo pipefail
+          case "${SOURCE_PATH}" in
+            ""|/*|*..*|*/*/*|*" "*)
+              echo "rejected path: ${SOURCE_PATH}"
+              echo "need a relative path, no .., no spaces, at most one slash"
+              exit 1
+              ;;
+          esac
+          if [ -d "${SOURCE_PATH}" ] || [ -f "${SOURCE_PATH}" ]; then
+            echo "source-path accepted: ${SOURCE_PATH}"
+          else
+            echo "source-path missing (${SOURCE_PATH}) — compile will skip"
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

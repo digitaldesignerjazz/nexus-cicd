@@ -18,6 +18,8 @@ jobs:
     with:
       python-version: "3.12"
       source-path: "src"
+      enable-pip-cache: true
+      cache-dependency-path: requirements.txt
 
   smoke:
     name: Smoke Script

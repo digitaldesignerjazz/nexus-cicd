@@ -24,6 +24,21 @@ jobs:
     name: Python ${{ inputs.python-version }}
     runs-on: ${{ inputs.runner }}
     steps:
+      - name: Validate python-version
+        env:
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: |
+          set -euo pipefail
+          case "${PYTHON_VERSION}" in
+            3.11|3.12|3.13) ;;
+            *)
+              echo "unsupported python-version: ${PYTHON_VERSION}"
+              echo "allowed: 3.11, 3.12, 3.13"
+              exit 1
+              ;;
+          esac
+          echo "python-version accepted: ${PYTHON_VERSION}"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -33,15 +48,17 @@ jobs:
           python-version: ${{ inputs.python-version }}
 
       - name: Compile & run reference layer
+        env:
+          SOURCE_PATH: ${{ inputs.source-path }}
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          if [ -d "${{ inputs.source-path }}" ]; then
-            find "${{ inputs.source-path }}" -name '*.py' -print0 | xargs -0 python -m py_compile
-          elif [ -f "${{ inputs.source-path }}" ]; then
-            python -m py_compile "${{ inputs.source-path }}"
+          if [ -d "${SOURCE_PATH}" ]; then
+            find "${SOURCE_PATH}" -name '*.py' -print0 | xargs -0 python -m py_compile
+          elif [ -f "${SOURCE_PATH}" ]; then
+            python -m py_compile "${SOURCE_PATH}"
           else
-            echo "No Python sources at ${{ inputs.source-path }} — skip compile."
+            echo "No Python sources at ${SOURCE_PATH} — skip compile."
           fi
           if [ -f src/nexus_cicd.py ]; then
             python src/nexus_cicd.py

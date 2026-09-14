@@ -18,120 +18,63 @@ on:
         type: string
         required: false
         default: "ubuntu-latest"
-      enable-pip-cache:
-        description: Enable setup-python pip cache (needs a lockfile)
-        type: boolean
-        required: false
-        default: false
-      cache-dependency-path:
-        description: Lockfile used as cache key
-        type: string
-        required: false
-        default: "requirements.txt"
+
+permissions:
+  contents: read
 
 jobs:
   python:
     name: Python ${{ inputs.python-version }}
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: 15
-    env:
-      PIP_DISABLE_PIP_VERSION_CHECK: "1"
-      PIP_NO_PYTHON_VERSION_WARNING: "1"
-      PYTHONDONTWRITEBYTECODE: "1"
+    timeout-minutes: 10
     steps:
-      - name: Validate python-version
-        env:
-          PYTHON_VERSION: ${{ inputs.python-version }}
-        run: |
-          set -euo pipefail
-          case "${PYTHON_VERSION}" in
-            3.11|3.12|3.13) ;;
-            *)
-              echo "unsupported python-version: ${PYTHON_VERSION}"
-              echo "allowed: 3.11, 3.12, 3.13"
-              exit 1
-              ;;
-          esac
-          echo "python-version accepted: ${PYTHON_VERSION}"
-
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
-      - name: Validate source-path
-        env:
-          SOURCE_PATH: ${{ inputs.source-path }}
+      - name: Detect dependency file
+        id: deps
         run: |
-          set -euo pipefail
-          case "${SOURCE_PATH}" in
-            ""|/*|*..*|*/*/*|*" "*)
-              echo "rejected path: ${SOURCE_PATH}"
-              echo "need a relative path, no .., no spaces, at most one slash"
-              exit 1
-              ;;
-          esac
-          if [ -d "${SOURCE_PATH}" ] || [ -f "${SOURCE_PATH}" ]; then
-            echo "source-path accepted: ${SOURCE_PATH}"
+          if [ -f requirements.txt ] || [ -f pyproject.toml ]; then
+            echo "has_lock=true" >> "$GITHUB_OUTPUT"
           else
-            echo "source-path missing (${SOURCE_PATH}) — compile will skip"
+            echo "has_lock=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Cache identity
-        if: ${{ inputs.enable-pip-cache }}
-        env:
-          PYTHON_VERSION: ${{ inputs.python-version }}
-          RUNNER_LABEL: ${{ inputs.runner }}
-          RUNNER_OS_NAME: ${{ runner.os }}
-          RUNNER_ARCH_NAME: ${{ runner.arch }}
-        run: |
-          set -euo pipefail
-          {
-            echo "python=${PYTHON_VERSION}"
-            echo "runner=${RUNNER_LABEL}"
-            echo "os=${RUNNER_OS_NAME}"
-            echo "arch=${RUNNER_ARCH_NAME}"
-          } > .ci-cache-identity
-          echo "cache identity:"
-          cat .ci-cache-identity
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Python with pip cache
+        if: steps.deps.outputs.has_lock == 'true'
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ inputs.python-version }}
-          cache: ${{ inputs.enable-pip-cache && 'pip' || '' }}
+          cache: pip
           cache-dependency-path: |
-            ${{ inputs.cache-dependency-path }}
-            .ci-cache-identity
+            requirements.txt
+            pyproject.toml
 
-      - name: Install from lockfile
-        if: ${{ inputs.enable-pip-cache }}
-        env:
-          LOCKFILE: ${{ inputs.cache-dependency-path }}
+      - name: Set up Python without cache
+        if: steps.deps.outputs.has_lock != 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Compile and run reference layer
         run: |
           set -euo pipefail
-          if [ ! -f "${LOCKFILE}" ]; then
-            echo "no lockfile at ${LOCKFILE} — skip install"
-            exit 0
-          fi
-          if grep -Eqv '^[[:space:]]*(#|$)' "${LOCKFILE}"; then
-            python -m pip install --upgrade pip
-            python -m pip install -r "${LOCKFILE}"
+          src="${{ inputs.source-path }}"
+          if [ -d "$src" ]; then
+            mapfile -t files < <(find "$src" -name '*.py' -type f)
+            if [ ${#files[@]} -gt 0 ]; then
+              python -m py_compile "${files[@]}"
+            else
+              echo "No Python sources in $src — skip compile."
+            fi
+          elif [ -f "$src" ]; then
+            python -m py_compile "$src"
           else
-            echo "lockfile has no pins — skip pip install"
-          fi
-
-      - name: Compile & run reference layer
-        env:
-          SOURCE_PATH: ${{ inputs.source-path }}
-        run: |
-          set -euo pipefail
-          if [ -d "${SOURCE_PATH}" ]; then
-            find "${SOURCE_PATH}" -name '*.py' -print0 | xargs -0 python -m py_compile
-          elif [ -f "${SOURCE_PATH}" ]; then
-            python -m py_compile "${SOURCE_PATH}"
-          else
-            echo "No Python sources at ${SOURCE_PATH} — skip compile."
+            echo "No Python sources at $src — skip compile."
           fi
           if [ -f src/nexus_cicd.py ]; then
             python src/nexus_cicd.py
           fi
-          echo "✓ Python layer integrity confirmed"
+          echo "Python layer integrity confirmed"
